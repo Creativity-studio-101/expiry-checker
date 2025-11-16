@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expiry Auditor</title>
+
+<style>
+body{font-family:Arial;padding:15px;background:#f2f2f2;}
+.card{background:#fff;padding:15px;margin-bottom:12px;border-radius:10px;box-shadow:0 0 6px #bbb;}
+input,button{padding:8px;width:100%;margin:5px 0;border-radius:6px;border:1px solid #999;}
+button{background:#0066ff;color:white;border:none;font-weight:bold;}
+button:hover{opacity:.9}
+.status{padding:8px;margin-top:6px;font-weight:bold;text-align:center;border-radius:6px;}
+.ok{background:#d1ffd1;color:#006600;}
+.warn{background:#fff8c2;color:#8a6d00;}
+.exp{background:#ffbdbd;color:#8b0000;}
+.hidden{display:none;}
+table{width:100%;border-collapse:collapse;margin-top:12px;}
+td,th{border:1px solid #888;padding:5px;text-align:center;}
+</style>
+</head>
+
+<body>
+<h2><b>Expiry Auditor (FSSAI)</b></h2>
+
+<div class="card">
+<label>MFG Date</label><input type="date" id="mfgDate">
+<label>EXP Date</label><input type="date" id="expDate">
+<label>Current Date</label><input type="date" id="currentDate">
+
+<button onclick="calculate()">CALCULATE</button>
+</div>
+
+<div class="card hidden" id="results">
+<p><b>Total Shelf Life:</b> <span id="totalLife"></span> days</p>
+<p><b>Remaining Life:</b> <span id="remainDays"></span></p>
+<p><b>10% Near Expiry Date:</b> <span id="nearDate"></span></p>
+<p id="statusP" class="status"></p>
+</div>
+
+<div id="saveCard" class="card hidden">
+<h3>Save Product</h3>
+<input placeholder="Product Name" id="pName">
+<input placeholder="Barcode / Batch No" id="pCode">
+<input placeholder="Manufacturer" id="pMfg">
+<input placeholder="Price" id="pPrice">
+<input placeholder="Quantity" id="pQty" type="number">
+
+<button onclick="saveProduct()">SAVE ENTRY</button>
+</div>
+
+<div class="card">
+<h3>Saved Near-Expiry Items</h3>
+<table id="reportTable">
+<thead><tr>
+<th>Name</th><th>Code</th><th>MFG</th><th>EXP</th><th>Current</th><th>% Left</th><th>Qty</th><th>Price</th>
+</tr></thead>
+<tbody id="reportBody"></tbody>
+</table>
+<button onclick="exportCSV()">EXPORT EXCEL CSV</button>
+<button onclick="resetReport()">CLEAR ALL</button>
+</div>
+
+<script>
+// ---------- DATE HELPERS ----------
+const daysBetween=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
+const addDays=(d,x)=>{let dt=new Date(d);dt.setDate(dt.getDate()+Math.floor(x));return dt.toISOString().split('T')[0];};
+
+// ---------- DOM ----------
+const mfgDate=document.getElementById("mfgDate");
+const expDate=document.getElementById("expDate");
+const currentDate=document.getElementById("currentDate");
+const results=document.getElementById("results");
+const saveCard=document.getElementById("saveCard");
+const totalLife=document.getElementById("totalLife");
+const remainDays=document.getElementById("remainDays");
+const nearDate=document.getElementById("nearDate");
+const statusP=document.getElementById("statusP");
+const body=document.getElementById("reportBody");
+
+// ---------- MAIN CALCULATION ----------
+function calculate(){
+  const m=mfgDate.value, e=expDate.value, c=currentDate.value;
+  if(!m||!e){alert("Set MFG & EXP dates");return;}
+
+  const total   = daysBetween(m,e);
+  const remaining = daysBetween(c,e);
+  const percentLeft = ((remaining/total)*100).toFixed(1);
+  const tenPct = total*0.10;
+  const near = addDays(e,-tenPct);
+
+  totalLife.textContent=total;
+  remainDays.textContent=`${remaining} days (${percentLeft}% left)`;
+  nearDate.textContent=near;
+  results.classList.remove("hidden");
+
+  if(remaining<0){ status("EXPIRED","exp"); }
+  else if(remaining <= Math.ceil(total*0.10)){ status("NEAR EXPIRY","warn"); }
+  else{ status("OK","ok"); }
+
+  if(statusP.classList.contains("warn")||statusP.classList.contains("exp"))
+      saveCard.classList.remove("hidden");
+  else
+      saveCard.classList.add("hidden");
+
+  return {m,e,c,total,remaining,percentLeft};
+}
+
+// ---------- STATUS COLOR ----------
+function status(txt,cls){
+  statusP.textContent=txt;
+  statusP.className="status "+cls;
+}
+
+// ---------- SAVE PRODUCT ----------
+function saveProduct(){
+  const data = calculate();
+  const row = {
+    name: pName.value,
+    code: pCode.value,
+    mfg: data.m,
+    exp: data.e,
+    cur: data.c || new Date().toISOString().split("T")[0],
+    pct: data.percentLeft,
+    qty: pQty.value,
+    price: pPrice.value
+  };
+
+  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
+  arr.push(row);
+  localStorage.setItem("expiryAudit",JSON.stringify(arr));
+  loadTable();
+  alert("Saved!");
+}
+
+// ---------- LOAD TABLE ----------
+function loadTable(){
+  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
+  body.innerHTML="";
+  arr.forEach(r=>{
+    body.innerHTML+=`<tr>
+      <td>${r.name}</td><td>${r.code}</td><td>${r.mfg}</td>
+      <td>${r.exp}</td><td>${r.cur}</td><td>${r.pct}%</td>
+      <td>${r.qty}</td><td>${r.price}</td></tr>`;
+  });
+}
+loadTable();
+
+// ---------- EXPORT CSV ----------
+function exportCSV(){
+  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
+  let csv="Name,Code,MFG,EXP,Current,% Left,Qty,Price\n";
+  arr.forEach(r=>{
+    csv+=`${r.name},${r.code},${r.mfg},${r.exp},${r.cur},${r.pct},${r.qty},${r.price}\n`;
+  });
+  let blob=new Blob([csv],{type:"text/csv"});
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="Expiry_Report.csv";
+  a.click();
+}
+
+// ---------- CLEAR ----------
+function resetReport(){
+  if(confirm("Delete all saved data?")){
+    localStorage.removeItem("expiryAudit");
+    loadTable();
+  }
+}
+
+// ---------- AUTO CALCULATE ----------
+[mfgDate,expDate,currentDate].forEach(i=>i.addEventListener("change",calculate));
+
+// ---------- AUTO CURRENT DATE ----------
+currentDate.value = new Date().toISOString().split("T")[0];
+
+// ---------- AUTO-GENERATE MANIFEST + SERVICE WORKER ----------
+let manifest={
+  name:"Expiry Auditor",
+  short_name:"ExpiryApp",
+  start_url:"./",
+  display:"standalone",
+  background_color:"#ffffff",
+  theme_color:"#0057ff",
+  icons:[{src:"icon.png",sizes:"192x192",type:"image/png"}]
+};
+let blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
+let url=URL.createObjectURL(blob);
+document.write(`<link rel="manifest" href="${url}">`);
+
+if("serviceWorker" in navigator){
+ let sw=`self.addEventListener('install',e=>{e.waitUntil(caches.open('x').then(c=>c.addAll(['./'])))});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})`;
+ let swBlob=new Blob([sw],{type:"text/javascript"});
+ let swUrl=URL.createObjectURL(swBlob);
+ navigator.serviceWorker.register(swUrl);
+}
+</script>
+</body>
+</html>

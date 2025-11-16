@@ -5,18 +5,71 @@
 <title>Expiry Auditor</title>
 
 <style>
-body{font-family:Arial;padding:15px;background:#f2f2f2;}
-.card{background:#fff;padding:15px;margin-bottom:12px;border-radius:10px;box-shadow:0 0 6px #bbb;}
-input,button{padding:8px;width:100%;margin:5px 0;border-radius:6px;border:1px solid #999;}
-button{background:#0066ff;color:white;border:none;font-weight:bold;}
-button:hover{opacity:.9}
-.status{padding:8px;margin-top:6px;font-weight:bold;text-align:center;border-radius:6px;}
-.ok{background:#d1ffd1;color:#006600;}
-.warn{background:#fff8c2;color:#8a6d00;}
-.exp{background:#ffbdbd;color:#8b0000;}
+body{
+  font-family: Arial;
+  padding:15px;
+  background:#121212;
+  color:#fff;
+}
+.card{
+  background:#1f1f1f;
+  padding:15px;
+  margin-bottom:12px;
+  border-radius:10px;
+  box-shadow:0 0 6px #000;
+}
+input,button{
+  padding:10px;
+  width:100%;
+  margin:6px 0;
+  border-radius:6px;
+  border:1px solid #777;
+  background:#2b2b2b;
+  color:white;
+}
+button{
+  background:#007bff;
+  border:none;
+  font-weight:bold;
+}
+button:hover{opacity:.8;}
+.status{
+  padding:8px;
+  margin-top:6px;
+  font-weight:bold;
+  text-align:center;
+  border-radius:6px;
+}
+.ok{background:#155724;color:#9dff9d;}
+.warn{background:#856404;color:#fff7ac;}
+.exp{background:#721c24;color:#ffb3b3;}
 .hidden{display:none;}
-table{width:100%;border-collapse:collapse;margin-top:12px;}
-td,th{border:1px solid #888;padding:5px;text-align:center;}
+
+.table-wrap{overflow-x:auto;}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:12px;
+  min-width:700px;
+}
+td,th{
+  border:1px solid #666;
+  padding:6px;
+  text-align:center;
+}
+.actionBtn{
+  background:#ff4444;
+  padding:4px 8px;
+  border-radius:4px;
+  margin:2px;
+}
+.editBtn{
+  background:#ffaa00;
+  padding:4px 8px;
+  border-radius:4px;
+  margin:2px;
+}
 </style>
 </head>
 
@@ -27,8 +80,6 @@ td,th{border:1px solid #888;padding:5px;text-align:center;}
 <label>MFG Date</label><input type="date" id="mfgDate">
 <label>EXP Date</label><input type="date" id="expDate">
 <label>Current Date</label><input type="date" id="currentDate">
-
-<button onclick="calculate()">CALCULATE</button>
 </div>
 
 <div class="card hidden" id="results">
@@ -45,28 +96,30 @@ td,th{border:1px solid #888;padding:5px;text-align:center;}
 <input placeholder="Manufacturer" id="pMfg">
 <input placeholder="Price" id="pPrice">
 <input placeholder="Quantity" id="pQty" type="number">
-
 <button onclick="saveProduct()">SAVE ENTRY</button>
 </div>
 
 <div class="card">
 <h3>Saved Near-Expiry Items</h3>
+
+<div class="table-wrap">
 <table id="reportTable">
 <thead><tr>
-<th>Name</th><th>Code</th><th>MFG</th><th>EXP</th><th>Current</th><th>% Left</th><th>Qty</th><th>Price</th>
+<th>Name</th><th>Code</th><th>MFG</th><th>EXP</th><th>Current</th><th>% Left</th><th>Qty</th><th>Price</th><th>Action</th>
 </tr></thead>
 <tbody id="reportBody"></tbody>
 </table>
-<button onclick="exportCSV()">EXPORT EXCEL CSV</button>
+</div>
+
+<button onclick="exportCSV()">EXPORT CSV</button>
 <button onclick="resetReport()">CLEAR ALL</button>
 </div>
 
+
 <script>
-// ---------- DATE HELPERS ----------
 const daysBetween=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
 const addDays=(d,x)=>{let dt=new Date(d);dt.setDate(dt.getDate()+Math.floor(x));return dt.toISOString().split('T')[0];};
 
-// ---------- DOM ----------
 const mfgDate=document.getElementById("mfgDate");
 const expDate=document.getElementById("expDate");
 const currentDate=document.getElementById("currentDate");
@@ -78,16 +131,14 @@ const nearDate=document.getElementById("nearDate");
 const statusP=document.getElementById("statusP");
 const body=document.getElementById("reportBody");
 
-// ---------- MAIN CALCULATION ----------
 function calculate(){
   const m=mfgDate.value, e=expDate.value, c=currentDate.value;
-  if(!m||!e){alert("Set MFG & EXP dates");return;}
+  if(!m||!e){return;}
 
   const total   = daysBetween(m,e);
   const remaining = daysBetween(c,e);
   const percentLeft = ((remaining/total)*100).toFixed(1);
-  const tenPct = total*0.10;
-  const near = addDays(e,-tenPct);
+  const near = addDays(e,-(total*0.10));
 
   totalLife.textContent=total;
   remainDays.textContent=`${remaining} days (${percentLeft}% left)`;
@@ -100,53 +151,81 @@ function calculate(){
 
   if(statusP.classList.contains("warn")||statusP.classList.contains("exp"))
       saveCard.classList.remove("hidden");
-  else
-      saveCard.classList.add("hidden");
+  else saveCard.classList.add("hidden");
 
   return {m,e,c,total,remaining,percentLeft};
 }
 
-// ---------- STATUS COLOR ----------
 function status(txt,cls){
   statusP.textContent=txt;
   statusP.className="status "+cls;
 }
 
-// ---------- SAVE PRODUCT ----------
 function saveProduct(){
   const data = calculate();
-  const row = {
+  const entry = {
     name: pName.value,
     code: pCode.value,
     mfg: data.m,
     exp: data.e,
-    cur: data.c || new Date().toISOString().split("T")[0],
+    cur: data.c,
     pct: data.percentLeft,
     qty: pQty.value,
     price: pPrice.value
   };
 
   let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
-  arr.push(row);
+  arr.push(entry);
   localStorage.setItem("expiryAudit",JSON.stringify(arr));
+
+  clearForm();
   loadTable();
   alert("Saved!");
 }
 
-// ---------- LOAD TABLE ----------
+function clearForm(){
+  document.querySelectorAll("#saveCard input").forEach(i=>i.value="");
+}
+
 function loadTable(){
   let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
   body.innerHTML="";
-  arr.forEach(r=>{
+  arr.forEach((r,i)=>{
     body.innerHTML+=`<tr>
       <td>${r.name}</td><td>${r.code}</td><td>${r.mfg}</td>
       <td>${r.exp}</td><td>${r.cur}</td><td>${r.pct}%</td>
-      <td>${r.qty}</td><td>${r.price}</td></tr>`;
+      <td>${r.qty}</td><td>${r.price}</td>
+      <td>
+        <button class="editBtn" onclick="editEntry(${i})">EDIT</button>
+        <button class="actionBtn" onclick="delEntry(${i})">DELETE</button>
+      </td>
+    </tr>`;
   });
 }
 loadTable();
 
-// ---------- EXPORT CSV ----------
+function delEntry(i){
+  let arr = JSON.parse(localStorage.getItem("expiryAudit"));
+  arr.splice(i,1);
+  localStorage.setItem("expiryAudit",JSON.stringify(arr));
+  loadTable();
+}
+
+function editEntry(i){
+  let arr = JSON.parse(localStorage.getItem("expiryAudit"));
+  let x = arr[i];
+
+  pName.value=x.name;
+  pCode.value=x.code;
+  pMfg.value=x.mfg;
+  pPrice.value=x.price;
+  pQty.value=x.qty;
+
+  arr.splice(i,1);
+  localStorage.setItem("expiryAudit",JSON.stringify(arr));
+  loadTable();
+}
+
 function exportCSV(){
   let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
   let csv="Name,Code,MFG,EXP,Current,% Left,Qty,Price\n";
@@ -160,7 +239,6 @@ function exportCSV(){
   a.click();
 }
 
-// ---------- CLEAR ----------
 function resetReport(){
   if(confirm("Delete all saved data?")){
     localStorage.removeItem("expiryAudit");
@@ -168,32 +246,22 @@ function resetReport(){
   }
 }
 
-// ---------- AUTO CALCULATE ----------
-[mfgDate,expDate,currentDate].forEach(i=>i.addEventListener("change",calculate));
+// AUTO CALCULATE FIX (mobile + desktop)
+[mfgDate, expDate, currentDate].forEach(f=>{
+  f.addEventListener("change", calculate);
+  f.addEventListener("input", calculate);
+});
 
-// ---------- AUTO CURRENT DATE ----------
 currentDate.value = new Date().toISOString().split("T")[0];
+</script>
 
-// ---------- AUTO-GENERATE MANIFEST + SERVICE WORKER ----------
-let manifest={
-  name:"Expiry Auditor",
-  short_name:"ExpiryApp",
-  start_url:"./",
-  display:"standalone",
-  background_color:"#ffffff",
-  theme_color:"#0057ff",
-  icons:[{src:"icon.png",sizes:"192x192",type:"image/png"}]
-};
-let blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
-let url=URL.createObjectURL(blob);
-document.write(`<link rel="manifest" href="${url}">`);
-
+<!-- REGISTER SW + MANIFEST -->
+<link rel="manifest" href="manifest.json">
+<script>
 if("serviceWorker" in navigator){
- let sw=`self.addEventListener('install',e=>{e.waitUntil(caches.open('x').then(c=>c.addAll(['./'])))});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})`;
- let swBlob=new Blob([sw],{type:"text/javascript"});
- let swUrl=URL.createObjectURL(swBlob);
- navigator.serviceWorker.register(swUrl);
+ navigator.serviceWorker.register("./service-worker.js");
 }
 </script>
+
 </body>
 </html>

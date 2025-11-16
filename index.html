@@ -18,7 +18,7 @@ body{
   border-radius:10px;
   box-shadow:0 0 6px #000;
 }
-input,button{
+input,button,select{
   padding:10px;
   width:100%;
   margin:6px 0;
@@ -51,7 +51,7 @@ table{
   width:100%;
   border-collapse:collapse;
   margin-top:12px;
-  min-width:700px;
+  min-width:1000px;
 }
 td,th{
   border:1px solid #666;
@@ -89,13 +89,27 @@ td,th{
 <p id="statusP" class="status"></p>
 </div>
 
+<!-- SAVE PRODUCT -->
 <div id="saveCard" class="card hidden">
 <h3>Save Product</h3>
+
 <input placeholder="Product Name" id="pName">
-<input placeholder="Barcode / Batch No" id="pCode">
+
+<!-- 🔥 ARTICLE NUMBER ADDED -->
+<input placeholder="Article Number" id="pArtiNo">
+
+<input placeholder="Batch No" id="pBatch">
+<input placeholder="Barcode" id="pBarcode">
 <input placeholder="Manufacturer" id="pMfg">
-<input placeholder="Price" id="pPrice">
+<input placeholder="Price" id="pPrice" type="number">
 <input placeholder="Quantity" id="pQty" type="number">
+
+<select id="pReason">
+  <option value="">Select Reason</option>
+  <option value="Lack of FIFO">Lack of FIFO</option>
+  <option value="Non-moving item">Non-moving item</option>
+</select>
+
 <button onclick="saveProduct()">SAVE ENTRY</button>
 </div>
 
@@ -104,9 +118,26 @@ td,th{
 
 <div class="table-wrap">
 <table id="reportTable">
+
 <thead><tr>
-<th>Name</th><th>Code</th><th>MFG</th><th>EXP</th><th>Current</th><th>% Left</th><th>Qty</th><th>Price</th><th>Action</th>
+<th>Name</th>
+
+<!-- 🔥 ARTICLE NUMBER ADDED -->
+<th>Article Number</th>
+
+<th>Batch No</th>
+<th>Barcode</th>
+<th>Manufacturer</th>
+<th>MFG</th>
+<th>EXP</th>
+<th>Audit Date</th>
+<th>% Left</th>
+<th>Qty</th>
+<th>Price</th>
+<th>Reason</th>
+<th>Action</th>
 </tr></thead>
+
 <tbody id="reportBody"></tbody>
 </table>
 </div>
@@ -114,7 +145,6 @@ td,th{
 <button onclick="exportCSV()">EXPORT CSV</button>
 <button onclick="resetReport()">CLEAR ALL</button>
 </div>
-
 
 <script>
 const daysBetween=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
@@ -165,13 +195,20 @@ function saveProduct(){
   const data = calculate();
   const entry = {
     name: pName.value,
-    code: pCode.value,
+
+    /* 🔥 ARTICLE NUMBER ADDED */
+    artiNo: pArtiNo.value,
+
+    batch: pBatch.value,
+    barcode: pBarcode.value,
+    mfgName: pMfg.value,
     mfg: data.m,
     exp: data.e,
-    cur: data.c,
+    audit: data.c,
     pct: data.percentLeft,
     qty: pQty.value,
-    price: pPrice.value
+    price: pPrice.value,
+    reason: pReason.value
   };
 
   let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
@@ -184,7 +221,7 @@ function saveProduct(){
 }
 
 function clearForm(){
-  document.querySelectorAll("#saveCard input").forEach(i=>i.value="");
+  document.querySelectorAll("#saveCard input, #saveCard select").forEach(i=>i.value="");
 }
 
 function loadTable(){
@@ -192,9 +229,21 @@ function loadTable(){
   body.innerHTML="";
   arr.forEach((r,i)=>{
     body.innerHTML+=`<tr>
-      <td>${r.name}</td><td>${r.code}</td><td>${r.mfg}</td>
-      <td>${r.exp}</td><td>${r.cur}</td><td>${r.pct}%</td>
-      <td>${r.qty}</td><td>${r.price}</td>
+      <td>${r.name}</td>
+
+      <!-- 🔥 ARTICLE NUMBER ADDED -->
+      <td>${r.artiNo}</td>
+
+      <td>${r.batch}</td>
+      <td>${r.barcode}</td>
+      <td>${r.mfgName}</td>
+      <td>${r.mfg}</td>
+      <td>${r.exp}</td>
+      <td>${r.audit}</td>
+      <td>${r.pct}%</td>
+      <td>${r.qty}</td>
+      <td>${r.price}</td>
+      <td>${r.reason}</td>
       <td>
         <button class="editBtn" onclick="editEntry(${i})">EDIT</button>
         <button class="actionBtn" onclick="delEntry(${i})">DELETE</button>
@@ -216,10 +265,16 @@ function editEntry(i){
   let x = arr[i];
 
   pName.value=x.name;
-  pCode.value=x.code;
-  pMfg.value=x.mfg;
+
+  /* 🔥 ARTICLE NUMBER ADDED */
+  pArtiNo.value=x.artiNo;
+
+  pBatch.value=x.batch;
+  pBarcode.value=x.barcode;
+  pMfg.value=x.mfgName;
   pPrice.value=x.price;
   pQty.value=x.qty;
+  pReason.value=x.reason;
 
   arr.splice(i,1);
   localStorage.setItem("expiryAudit",JSON.stringify(arr));
@@ -228,9 +283,9 @@ function editEntry(i){
 
 function exportCSV(){
   let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
-  let csv="Name,Code,MFG,EXP,Current,% Left,Qty,Price\n";
+  let csv="Name,Article Number,Batch No,Barcode,Manufacturer,MFG,EXP,Audit Date,% Left,Qty,Price,Reason\n";
   arr.forEach(r=>{
-    csv+=`${r.name},${r.code},${r.mfg},${r.exp},${r.cur},${r.pct},${r.qty},${r.price}\n`;
+    csv+=`${r.name},${r.artiNo},${r.batch},${r.barcode},${r.mfgName},${r.mfg},${r.exp},${r.audit},${r.pct},${r.qty},${r.price},${r.reason}\n`;
   });
   let blob=new Blob([csv],{type:"text/csv"});
   let a=document.createElement("a");
@@ -246,7 +301,7 @@ function resetReport(){
   }
 }
 
-// AUTO CALCULATE FIX (mobile + desktop)
+// Auto calculate
 [mfgDate, expDate, currentDate].forEach(f=>{
   f.addEventListener("change", calculate);
   f.addEventListener("input", calculate);
@@ -255,7 +310,6 @@ function resetReport(){
 currentDate.value = new Date().toISOString().split("T")[0];
 </script>
 
-<!-- REGISTER SW + MANIFEST -->
 <link rel="manifest" href="manifest.json">
 <script>
 if("serviceWorker" in navigator){

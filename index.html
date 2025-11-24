@@ -1,319 +1,637 @@
+<!-- index.html (REPLACE your existing file with this full contents) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Expiry Auditor</title>
 
+<!-- SheetJS (xlsx) full build for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <style>
-body{
-  font-family: Arial;
-  padding:15px;
-  background:#121212;
-  color:#fff;
-}
-.card{
-  background:#1f1f1f;
-  padding:15px;
-  margin-bottom:12px;
-  border-radius:10px;
-  box-shadow:0 0 6px #000;
-}
-input,button,select{
-  padding:10px;
-  width:100%;
-  margin:6px 0;
-  border-radius:6px;
-  border:1px solid #777;
-  background:#2b2b2b;
-  color:white;
-}
-button{
-  background:#007bff;
-  border:none;
-  font-weight:bold;
-}
-button:hover{opacity:.8;}
-.status{
-  padding:8px;
-  margin-top:6px;
-  font-weight:bold;
-  text-align:center;
-  border-radius:6px;
-}
-.ok{background:#155724;color:#9dff9d;}
-.warn{background:#856404;color:#fff7ac;}
-.exp{background:#721c24;color:#ffb3b3;}
-.hidden{display:none;}
-
-.table-wrap{overflow-x:auto;}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-  margin-top:12px;
-  min-width:1000px;
-}
-td,th{
-  border:1px solid #666;
-  padding:6px;
-  text-align:center;
-}
-.actionBtn{
-  background:#ff4444;
-  padding:4px 8px;
-  border-radius:4px;
-  margin:2px;
-}
-.editBtn{
-  background:#ffaa00;
-  padding:4px 8px;
-  border-radius:4px;
-  margin:2px;
-}
+  :root{
+    --bg:#121212;
+    --card:#1f1f1f;
+    --muted:#2b2b2b;
+    --border:#666;
+    --accent:#007bff;
+    --text:#fff;
+  }
+  body{
+    font-family: Arial, sans-serif;
+    padding:15px;
+    background:var(--bg);
+    color:var(--text);
+    margin:0;
+  }
+  h2{margin:0 0 12px 0;}
+  .card{
+    background:var(--card);
+    padding:14px;
+    margin-bottom:12px;
+    border-radius:10px;
+    box-shadow:0 0 6px #000;
+  }
+  input,select,button,textarea{
+    padding:10px;
+    width:100%;
+    margin:6px 0;
+    border-radius:6px;
+    border:1px solid #777;
+    background:var(--muted);
+    color:var(--text);
+    box-sizing:border-box;
+  }
+  button{ background:var(--accent); border:none; font-weight:bold; cursor:pointer; }
+  button:hover{ opacity:.9; }
+  .status{ padding:8px; margin-top:6px; font-weight:bold; text-align:center; border-radius:6px;}
+  .ok{ background:#155724; color:#9dff9d;}
+  .warn{ background:#856404; color:#fff7ac;}
+  .exp{ background:#721c24; color:#ffb3b3;}
+  .hidden{ display:none; }
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; margin-top:12px; min-width:1400px; background:#0b0b0b;}
+  th,td{ border:1px solid var(--border); padding:6px; text-align:center; vertical-align:middle; font-size:13px; }
+  th{ background:#2a2a2a; font-weight:700; }
+  label.small{ display:block; font-size:12px; color:#ccc; margin-top:6px;}
+  a.template-link{ color:#9fd1ff; text-decoration:none; display:inline-block; margin-top:6px; }
 </style>
 </head>
-
 <body>
-<h2><b>Expiry Auditor (FSSAI)</b></h2>
 
+<h2>Expiry Auditor (FSSAI)</h2>
+
+<!-- Link to the uploaded Excel template you provided (local path) -->
 <div class="card">
-<label>MFG Date</label><input type="date" id="mfgDate">
-<label>EXP Date</label><input type="date" id="expDate">
-<label>Current Date</label><input type="date" id="currentDate">
+  <small>Template / Reference file:</small><br>
+  <a class="template-link" href="/mnt/data/5903 Expire Sheet 11.09.2025.xlsx" target="_blank">Download Excel Template (5903 Expire Sheet 11.09.2025.xlsx)</a>
 </div>
 
-<div class="card hidden" id="results">
-<p><b>Total Shelf Life:</b> <span id="totalLife"></span> days</p>
-<p><b>Remaining Life:</b> <span id="remainDays"></span></p>
-<p><b>10% Near Expiry Date:</b> <span id="nearDate"></span></p>
-<p id="statusP" class="status"></p>
+<!-- Calculation card (top) -->
+<div class="card">
+  <label class="small">Mfg / Packed Date</label>
+  <input type="date" id="mfgDate">
+
+  <label class="small">Expiry Date</label>
+  <input type="date" id="expDate">
+
+  <label class="small">FSSA Audit Date (Current Date)</label>
+  <input type="date" id="auditDate">
 </div>
 
-<!-- SAVE PRODUCT -->
+<!-- Results card -->
+<div id="results" class="card hidden">
+  <p><b>Shelf Life:</b> <span id="shelfLife"></span> days</p>
+  <p><b>Near Expiry Date:</b> <span id="nearDate"></span></p>
+  <p><b>% Shelf Life Remaining:</b> <span id="pctLeft"></span>%</p>
+  <p id="statusP" class="status"></p>
+</div>
+
+<!-- NEW HEADER SECTION (Store / Site / Date) placed BELOW the expiry result -->
+<div id="storeHeaderCard" class="card hidden">
+  <label class="small">Store (this fills Store Name in form)</label>
+  <input type="text" id="storeTop" placeholder="e.g. Shankeshwer">
+
+  <label class="small">Site (Only number) — this fills Store Code in form</label>
+  <input type="number" id="siteTop" placeholder="e.g. 5903">
+
+  <label class="small">Date (auto) — fills FSSA Audit Date</label>
+  <input type="date" id="topDate">
+</div>
+
+<!-- SAVE PRODUCT (all Excel fields inside) -->
 <div id="saveCard" class="card hidden">
-<h3>Save Product</h3>
+  <h3>Save Product</h3>
 
-<input placeholder="Product Name" id="pName">
+  <!-- Region & RAH fixed -->
+  <input id="region" placeholder="Region (auto)" readonly>
+  <input id="rah" placeholder="RAH (auto)" readonly>
 
-<!-- 🔥 ARTICLE NUMBER ADDED -->
-<input placeholder="Article Number" id="pArtiNo">
+  <input id="storeName" placeholder="Store Name">
+  <input id="storeCode" placeholder="Store Code">
 
-<input placeholder="Batch No" id="pBatch">
-<input placeholder="Barcode" id="pBarcode">
-<input placeholder="Manufacturer" id="pMfg">
-<input placeholder="Price" id="pPrice" type="number">
-<input placeholder="Quantity" id="pQty" type="number">
+  <input id="articleNo" placeholder="Article No">
+  <input id="articleDesc" placeholder="Article Description">
+  <input id="ean" placeholder="EAN">
 
-<select id="pReason">
-  <option value="">Select Reason</option>
-  <option value="Lack of FIFO">Lack of FIFO</option>
-  <option value="Non-moving item">Non-moving item</option>
-</select>
+  <input id="batch" placeholder="Batch No / Other details of product">
 
-<button onclick="saveProduct()">SAVE ENTRY</button>
+  <input id="manufacturer" placeholder="Manufacturer Name">
+
+  <label class="small">Mfg/Packed date</label>
+  <input type="date" id="mfgDate2">
+
+  <label class="small">FSSA Audit Date</label>
+  <input type="date" id="auditDate2">
+
+  <label class="small">Expiry date</label>
+  <input type="date" id="expDate2">
+
+  <label class="small">Near Expiry date (auto)</label>
+  <input id="nearDateOut" readonly>
+
+  <label class="small">Shelf Life (days) (auto)</label>
+  <input id="shelfLifeOut" readonly>
+
+  <label class="small">% Shelf life left remaining (auto)</label>
+  <input id="pctLeftOut" readonly>
+
+  <label class="small">Place</label>
+  <select id="place">
+    <option value="">Select</option>
+    <option value="GODOWN">Godown</option>
+    <option value="FLOOR">Floor</option>
+  </select>
+
+  <input id="area" placeholder="Area">
+
+  <input id="totalQty" placeholder="Total Qty" type="number" min="0" step="1">
+  <input id="mrp" placeholder="MRP" type="number" min="0" step="0.01">
+
+  <label class="small">Total Value (auto = MRP × Qty)</label>
+  <input id="totalValue" readonly>
+
+  <label class="small">Remark (auto)</label>
+  <input id="remark" readonly>
+
+  <label class="small">Reason for Expiry</label>
+  <select id="reason">
+    <option value="">Select Reason</option>
+    <option value="FIFO ISSUE">FIFO ISSUE</option>
+    <option value="NON-MOVING PRODUCT">NON-MOVING PRODUCT</option>
+  </select>
+
+  <button id="saveBtn">SAVE ENTRY</button>
 </div>
 
+<!-- Report table -->
 <div class="card">
-<h3>Saved Near-Expiry Items</h3>
+  <h3>Saved Near-Expiry Items</h3>
+  <div class="table-wrap">
+    <table id="reportTable">
+      <thead>
+        <tr>
+          <th>Region</th>
+          <th>RAH</th>
+          <th>Store Name</th>
+          <th>Store Code</th>
+          <th>Article No</th>
+          <th>Article Description</th>
+          <th>EAN</th>
+          <th>Batch No / Other details of product</th>
+          <th>Manufacturer Name</th>
+          <th>Mfg/Packed date</th>
+          <th>FSSA Audit Date</th>
+          <th>Expiry date</th>
+          <th>Near Expiry date</th>
+          <th>Shelf Life</th>
+          <th>Percentage of Shelf life left remaining</th>
+          <th>Place</th>
+          <th>Area</th>
+          <th>Total Qty</th>
+          <th>MRP</th>
+          <th>Total Value</th>
+          <th>Remark</th>
+          <th>Reason for Expiry</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="reportBody"></tbody>
+    </table>
+  </div>
 
-<div class="table-wrap">
-<table id="reportTable">
-
-<thead><tr>
-<th>Name</th>
-
-<!-- 🔥 ARTICLE NUMBER ADDED -->
-<th>Article Number</th>
-
-<th>Batch No</th>
-<th>Barcode</th>
-<th>Manufacturer</th>
-<th>MFG</th>
-<th>EXP</th>
-<th>Audit Date</th>
-<th>% Left</th>
-<th>Qty</th>
-<th>Price</th>
-<th>Reason</th>
-<th>Action</th>
-</tr></thead>
-
-<tbody id="reportBody"></tbody>
-</table>
+  <div style="display:flex; gap:8px; margin-top:12px;">
+    <button onclick="exportExcel()" style="flex:1">EXPORT XLSX (with borders + bold headers)</button>
+    <button onclick="resetReport()" style="flex:1; background:#ff4444">CLEAR ALL</button>
+  </div>
 </div>
 
-<button onclick="exportCSV()">EXPORT CSV</button>
-<button onclick="resetReport()">CLEAR ALL</button>
-</div>
+<link rel="manifest" href="manifest.json">
 
 <script>
-const daysBetween=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
-const addDays=(d,x)=>{let dt=new Date(d);dt.setDate(dt.getDate()+Math.floor(x));return dt.toISOString().split('T')[0];};
+/* Utilities */
+const daysBetween = (a,b) => { if(!a || !b) return NaN; return Math.ceil((new Date(b) - new Date(a)) / (1000*60*60*24)); };
+const addDays = (d,x) => { if(!d) return ""; let dt=new Date(d); dt.setDate(dt.getDate()+Math.floor(x)); return dt.toISOString().split('T')[0]; };
+const escapeHtml = s => (s===null||s===undefined) ? "" : String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
-const mfgDate=document.getElementById("mfgDate");
-const expDate=document.getElementById("expDate");
-const currentDate=document.getElementById("currentDate");
-const results=document.getElementById("results");
-const saveCard=document.getElementById("saveCard");
-const totalLife=document.getElementById("totalLife");
-const remainDays=document.getElementById("remainDays");
-const nearDate=document.getElementById("nearDate");
-const statusP=document.getElementById("statusP");
-const body=document.getElementById("reportBody");
+/* DOM refs */
+const mfgDate = document.getElementById("mfgDate");
+const expDate = document.getElementById("expDate");
+const auditDate = document.getElementById("auditDate");
 
+const results = document.getElementById("results");
+const storeHeaderCard = document.getElementById("storeHeaderCard");
+const storeTop = document.getElementById("storeTop");
+const siteTop = document.getElementById("siteTop");
+const topDate = document.getElementById("topDate");
+
+const saveCard = document.getElementById("saveCard");
+const regionInp = document.getElementById("region");
+const rahInp = document.getElementById("rah");
+const storeName = document.getElementById("storeName");
+const storeCode = document.getElementById("storeCode");
+const articleNo = document.getElementById("articleNo");
+const articleDesc = document.getElementById("articleDesc");
+const ean = document.getElementById("ean");
+const batch = document.getElementById("batch");
+const manufacturer = document.getElementById("manufacturer");
+const mfgDate2 = document.getElementById("mfgDate2");
+const auditDate2 = document.getElementById("auditDate2");
+const expDate2 = document.getElementById("expDate2");
+const nearDateOut = document.getElementById("nearDateOut");
+const shelfLifeOut = document.getElementById("shelfLifeOut");
+const pctLeftOut = document.getElementById("pctLeftOut");
+const place = document.getElementById("place");
+const area = document.getElementById("area");
+const totalQty = document.getElementById("totalQty");
+const mrp = document.getElementById("mrp");
+const totalValue = document.getElementById("totalValue");
+const remark = document.getElementById("remark");
+const reason = document.getElementById("reason");
+const saveBtn = document.getElementById("saveBtn");
+const reportBody = document.getElementById("reportBody");
+
+/* defaults */
+regionInp.value = "South MH";
+rahInp.value = "Satish Waykar";
+
+/* top date default (today) */
+const today = new Date().toISOString().split('T')[0];
+topDate.value = today;
+auditDate.value = today;
+auditDate2.value = today;
+
+/* wire top store/site to form */
+storeTop.addEventListener("input", ()=> { storeName.value = storeTop.value; });
+siteTop.addEventListener("input", ()=> { storeCode.value = siteTop.value; });
+topDate.addEventListener("change", ()=> {
+  auditDate.value = topDate.value;
+  auditDate2.value = topDate.value;
+  calculate();
+});
+
+/* main calculation using Excel confirmed formulas */
 function calculate(){
-  const m=mfgDate.value, e=expDate.value, c=currentDate.value;
-  if(!m||!e){return;}
+  const m = mfgDate.value;
+  const e = expDate.value;
+  const a = auditDate.value || today;
+  if(!m || !e){
+    results.classList.add("hidden");
+    storeHeaderCard.classList.add("hidden");
+    saveCard.classList.add("hidden");
+    return null;
+  }
 
-  const total   = daysBetween(m,e);
-  const remaining = daysBetween(c,e);
-  const percentLeft = ((remaining/total)*100).toFixed(1);
-  const near = addDays(e,-(total*0.10));
+  const total = daysBetween(m,e); // shelf life
+  const tenPct = Math.ceil(total * 0.10);
+  const near = addDays(e, -tenPct + 1); // per Excel formula
 
-  totalLife.textContent=total;
-  remainDays.textContent=`${remaining} days (${percentLeft}% left)`;
-  nearDate.textContent=near;
+  let pct = 0;
+  if(total > 0){
+    const days_exp_minus_near = daysBetween(near, e);
+    pct = ((days_exp_minus_near / total) * 100);
+    pct = isNaN(pct) ? 0 : parseFloat(pct.toFixed(1));
+  }
+
+  // fill results
+  document.getElementById("shelfLife").textContent = isNaN(total) ? "" : total;
+  document.getElementById("nearDate").textContent = near || "";
+  document.getElementById("pctLeft").textContent = pct;
   results.classList.remove("hidden");
 
-  if(remaining<0){ status("EXPIRED","exp"); }
-  else if(remaining <= Math.ceil(total*0.10)){ status("NEAR EXPIRY","warn"); }
-  else{ status("OK","ok"); }
+  // determine remark & status
+  const cur = new Date(a);
+  const expD = new Date(e);
+  const nearD = new Date(near);
 
-  if(statusP.classList.contains("warn")||statusP.classList.contains("exp"))
-      saveCard.classList.remove("hidden");
-  else saveCard.classList.add("hidden");
+  let remarkText = "";
+  if(cur > expD){
+    status("EXPIRED", "exp");
+    remarkText = "EXPIRED";
+  } else if(cur >= nearD){
+    status("NEAR EXPIRY", "warn");
+    remarkText = "NEAR-EXPIRED";
+  } else {
+    status("OK", "ok");
+    remarkText = "OK";
+  }
 
-  return {m,e,c,total,remaining,percentLeft};
+  // prefill save form fields (readonly date fields)
+  mfgDate2.value = m;
+  expDate2.value = e;
+  auditDate2.value = a;
+  nearDateOut.value = near || "";
+  shelfLifeOut.value = isNaN(total) ? "" : total;
+  pctLeftOut.value = pct;
+  remark.value = remarkText;
+
+  // show header (store/site/date) below result
+  storeHeaderCard.classList.remove("hidden");
+
+  // show save card only when near-expiry or expired
+  if(remarkText === "NEAR-EXPIRED" || remarkText === "EXPIRED"){
+    saveCard.classList.remove("hidden");
+    // copy top store/site values if provided
+    if(storeTop.value) storeName.value = storeTop.value;
+    if(siteTop.value) storeCode.value = siteTop.value;
+  } else {
+    saveCard.classList.add("hidden");
+  }
+
+  return { m, e, a, total, near, pct, remarkText };
 }
 
 function status(txt,cls){
-  statusP.textContent=txt;
-  statusP.className="status "+cls;
+  const statusP = document.getElementById("statusP");
+  statusP.textContent = txt;
+  statusP.className = "status " + cls;
 }
 
-function saveProduct(){
-  const data = calculate();
+/* keep total value updated */
+function updateTotalValue(){
+  const q = Number(totalQty.value) || 0;
+  const p = Number(mrp.value) || 0;
+  const tv = q * p;
+  totalValue.value = Number.isFinite(tv) ? tv.toFixed(2) : "";
+}
+totalQty.addEventListener("input", updateTotalValue);
+mrp.addEventListener("input", updateTotalValue);
+
+/* Save entry */
+saveBtn.addEventListener("click", ()=> {
+  const calc = calculate();
+  if(!calc) { alert("Fill Mfg & Expiry dates first"); return; }
+  const q = Number(totalQty.value) || 0;
+  const p = Number(mrp.value) || 0;
+  const tv = q * p;
+
   const entry = {
-    name: pName.value,
-
-    /* 🔥 ARTICLE NUMBER ADDED */
-    artiNo: pArtiNo.value,
-
-    batch: pBatch.value,
-    barcode: pBarcode.value,
-    mfgName: pMfg.value,
-    mfg: data.m,
-    exp: data.e,
-    audit: data.c,
-    pct: data.percentLeft,
-    qty: pQty.value,
-    price: pPrice.value,
-    reason: pReason.value
+    region: regionInp.value || "",
+    rah: rahInp.value || "",
+    storeName: storeName.value || "",
+    storeCode: storeCode.value || "",
+    articleNo: articleNo.value || "",
+    articleDesc: articleDesc.value || "",
+    ean: ean.value || "",
+    batch: batch.value || "",
+    manufacturer: manufacturer.value || "",
+    mfg: calc.m,
+    audit: calc.a,
+    exp: calc.e,
+    near: calc.near,
+    shelfLife: calc.total,
+    pctLeft: calc.pct,
+    place: place.value || "",
+    area: area.value || "",
+    totalQty: q,
+    mrp: p,
+    totalValue: Number.isFinite(tv) ? tv.toFixed(2) : "",
+    remark: calc.remarkText,
+    reason: reason.value || ""
   };
 
-  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
+  let arr = JSON.parse(localStorage.getItem("expiryAudit") || "[]");
   arr.push(entry);
-  localStorage.setItem("expiryAudit",JSON.stringify(arr));
-
-  clearForm();
-  loadTable();
+  localStorage.setItem("expiryAudit", JSON.stringify(arr));
+  clearSaveForm();
+  renderTable();
   alert("Saved!");
-}
+});
 
-function clearForm(){
-  document.querySelectorAll("#saveCard input, #saveCard select").forEach(i=>i.value="");
-}
-
-function loadTable(){
-  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
-  body.innerHTML="";
-  arr.forEach((r,i)=>{
-    body.innerHTML+=`<tr>
-      <td>${r.name}</td>
-
-      <!-- 🔥 ARTICLE NUMBER ADDED -->
-      <td>${r.artiNo}</td>
-
-      <td>${r.batch}</td>
-      <td>${r.barcode}</td>
-      <td>${r.mfgName}</td>
-      <td>${r.mfg}</td>
-      <td>${r.exp}</td>
-      <td>${r.audit}</td>
-      <td>${r.pct}%</td>
-      <td>${r.qty}</td>
-      <td>${r.price}</td>
-      <td>${r.reason}</td>
-      <td>
-        <button class="editBtn" onclick="editEntry(${i})">EDIT</button>
-        <button class="actionBtn" onclick="delEntry(${i})">DELETE</button>
-      </td>
-    </tr>`;
+/* Clear save form (preserve top store/site) */
+function clearSaveForm(){
+  const ids = ["storeName","storeCode","articleNo","articleDesc","ean","batch","manufacturer",
+    "mfgDate2","auditDate2","expDate2","nearDateOut","shelfLifeOut","pctLeftOut",
+    "place","area","totalQty","mrp","totalValue","remark","reason"];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.tagName.toLowerCase() === "select") el.selectedIndex = 0;
+    else el.value = "";
   });
 }
-loadTable();
 
-function delEntry(i){
-  let arr = JSON.parse(localStorage.getItem("expiryAudit"));
+/* render table */
+function renderTable(){
+  let arr = JSON.parse(localStorage.getItem("expiryAudit") || "[]");
+  reportBody.innerHTML = "";
+  arr.forEach((r,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(r.region)}</td>
+      <td>${escapeHtml(r.rah)}</td>
+      <td>${escapeHtml(r.storeName)}</td>
+      <td>${escapeHtml(r.storeCode)}</td>
+      <td>${escapeHtml(r.articleNo)}</td>
+      <td>${escapeHtml(r.articleDesc)}</td>
+      <td>${escapeHtml(r.ean)}</td>
+      <td>${escapeHtml(r.batch)}</td>
+      <td>${escapeHtml(r.manufacturer)}</td>
+      <td>${escapeHtml(r.mfg)}</td>
+      <td>${escapeHtml(r.audit)}</td>
+      <td>${escapeHtml(r.exp)}</td>
+      <td>${escapeHtml(r.near)}</td>
+      <td>${escapeHtml(r.shelfLife)}</td>
+      <td>${escapeHtml(r.pctLeft)}%</td>
+      <td>${escapeHtml(r.place)}</td>
+      <td>${escapeHtml(r.area)}</td>
+      <td>${escapeHtml(r.totalQty)}</td>
+      <td>${escapeHtml(r.mrp)}</td>
+      <td>${escapeHtml(r.totalValue)}</td>
+      <td>${escapeHtml(r.remark)}</td>
+      <td>${escapeHtml(r.reason)}</td>
+      <td>
+        <button onclick="editEntry(${i})" class="editBtn">EDIT</button>
+        <button onclick="deleteEntry(${i})" class="actionBtn">DELETE</button>
+      </td>`;
+    reportBody.appendChild(tr);
+  });
+}
+renderTable();
+
+function deleteEntry(i){
+  if(!confirm("Delete this entry?")) return;
+  let arr = JSON.parse(localStorage.getItem("expiryAudit") || "[]");
   arr.splice(i,1);
-  localStorage.setItem("expiryAudit",JSON.stringify(arr));
-  loadTable();
+  localStorage.setItem("expiryAudit", JSON.stringify(arr));
+  renderTable();
 }
 
 function editEntry(i){
-  let arr = JSON.parse(localStorage.getItem("expiryAudit"));
+  let arr = JSON.parse(localStorage.getItem("expiryAudit") || "[]");
   let x = arr[i];
-
-  pName.value=x.name;
-
-  /* 🔥 ARTICLE NUMBER ADDED */
-  pArtiNo.value=x.artiNo;
-
-  pBatch.value=x.batch;
-  pBarcode.value=x.barcode;
-  pMfg.value=x.mfgName;
-  pPrice.value=x.price;
-  pQty.value=x.qty;
-  pReason.value=x.reason;
+  regionInp.value = x.region || "South MH";
+  rahInp.value = x.rah || "Satish Waykar";
+  storeName.value = x.storeName || "";
+  storeCode.value = x.storeCode || "";
+  articleNo.value = x.articleNo || "";
+  articleDesc.value = x.articleDesc || "";
+  ean.value = x.ean || "";
+  batch.value = x.batch || "";
+  manufacturer.value = x.manufacturer || "";
+  mfgDate2.value = x.mfg || "";
+  auditDate2.value = x.audit || "";
+  expDate2.value = x.exp || "";
+  nearDateOut.value = x.near || "";
+  shelfLifeOut.value = x.shelfLife || "";
+  pctLeftOut.value = x.pctLeft || "";
+  place.value = x.place || "";
+  area.value = x.area || "";
+  totalQty.value = x.totalQty || "";
+  mrp.value = x.mrp || "";
+  totalValue.value = x.totalValue || "";
+  remark.value = x.remark || "";
+  reason.value = x.reason || "";
 
   arr.splice(i,1);
-  localStorage.setItem("expiryAudit",JSON.stringify(arr));
-  loadTable();
+  localStorage.setItem("expiryAudit", JSON.stringify(arr));
+  renderTable();
+
+  results.classList.remove("hidden");
+  storeHeaderCard.classList.remove("hidden");
+  saveCard.classList.remove("hidden");
 }
 
-function exportCSV(){
-  let arr = JSON.parse(localStorage.getItem("expiryAudit")||"[]");
-  let csv="Name,Article Number,Batch No,Barcode,Manufacturer,MFG,EXP,Audit Date,% Left,Qty,Price,Reason\n";
-  arr.forEach(r=>{
-    csv+=`${r.name},${r.artiNo},${r.batch},${r.barcode},${r.mfgName},${r.mfg},${r.exp},${r.audit},${r.pct},${r.qty},${r.price},${r.reason}\n`;
-  });
-  let blob=new Blob([csv],{type:"text/csv"});
-  let a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="Expiry_Report.csv";
-  a.click();
-}
-
+/* reset all */
 function resetReport(){
-  if(confirm("Delete all saved data?")){
-    localStorage.removeItem("expiryAudit");
-    loadTable();
-  }
+  if(!confirm("Delete all saved data?")) return;
+  localStorage.removeItem("expiryAudit");
+  renderTable();
 }
 
-// Auto calculate
-[mfgDate, expDate, currentDate].forEach(f=>{
+/* EXPORT XLSX with Store/Site/Date mini-table above main table, one empty row between, bold headers & borders */
+function exportExcel(){
+  const arr = JSON.parse(localStorage.getItem("expiryAudit") || "[]");
+
+  // Build header arrays
+  const header = [
+    "Region","RAH","Store Name","Store Code","Article No","Article Description","EAN",
+    "Batch No / Other details of product","Manufacturer Name","Mfg/Packed date",
+    "FSSA Audit Date","Expiry date","Near Expiry date","Shelf Life",
+    "Percentage of Shelf life left remaining","Place","Area","Total Qty","MRP",
+    "Total Value","Remark","Reason for Expiry"
+  ];
+
+  // Prepare sheet data:
+  const sheetData = [];
+
+  // SECTION 1: Store / Site / Date as two-column rows; we will shift them to start at column B by prefixing empty cell.
+  // Row: [ "", "Store", storeName ] but to maintain two columns we put empty cell before key and value at next column.
+  sheetData.push([]); // row 1 empty
+  sheetData.push([]); // row 2 empty
+  sheetData.push([]); // row 3 empty
+  sheetData.push([]); // row 4 empty
+  sheetData.push([]); // row 5 empty
+
+  // row 6: headers at column B: we'll build row with leading empty cell then "Store" and value at next column
+  sheetData.push([ "", "Store", storeTop.value || storeName.value || "" ]);
+  // row 7
+  sheetData.push([ "", "Site", siteTop.value || storeCode.value || "" ]);
+  // row 8
+  sheetData.push([ "", "Date", topDate.value || auditDate.value || today ]);
+
+  // empty row to separate sections
+  sheetData.push([]);
+
+  // Now add main header row starting at column B (prefix empty cell)
+  sheetData.push([ "" , ...header ]);
+
+  // Add data rows
+  arr.forEach(r=>{
+    const row = [
+      "",
+      r.region || "",
+      r.rah || "",
+      r.storeName || "",
+      r.storeCode || "",
+      r.articleNo || "",
+      r.articleDesc || "",
+      r.ean || "",
+      r.batch || "",
+      r.manufacturer || "",
+      r.mfg || "",
+      r.audit || "",
+      r.exp || "",
+      r.near || "",
+      r.shelfLife || "",
+      r.pctLeft || "",
+      r.place || "",
+      r.area || "",
+      r.totalQty || "",
+      r.mrp || "",
+      r.totalValue || "",
+      r.remark || "",
+      r.reason || ""
+    ];
+    sheetData.push(row);
+  });
+
+  // Convert to worksheet
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Apply simple border and header bold styling where supported
+  // Note: SheetJS style support depends on build; this attempts to set styles for consumers that support it.
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let R = range.s.r; R <= range.e.r; ++R){
+    for(let C = range.s.c; C <= range.e.c; ++C){
+      const addr = XLSX.utils.encode_cell({r:R,c:C});
+      const cell = ws[addr];
+      if(!cell) continue;
+
+      // add thin border
+      cell.s = cell.s || {};
+      cell.s.border = {
+        top:{style:"thin", color:{rgb:"000000"}},
+        bottom:{style:"thin", color:{rgb:"000000"}},
+        left:{style:"thin", color:{rgb:"000000"}},
+        right:{style:"thin", color:{rgb:"000000"}}
+      };
+
+      // make header cells bold: header row index = (5 + 4)?? We placed header at sheetData index 9 => zero-based R=9
+      // But to be safer, detect the header row by searching for our header first cell content match.
+      // We'll bold cells in the row which contains the first header label "Region" at column B.
+      if(R === 9){ // empirically header row R=9 (0-based) given the pushes above
+        cell.s.font = Object.assign({}, cell.s.font || {}, {bold:true});
+      }
+      // Also bold the small section keys row (Store, Site, Date) which are at R=5,6,7 (0-based)
+      if(R === 5 || R === 6 || R === 7){
+        // column C (index 1) is the label; make it bold
+        if(C === 1){
+          cell.s.font = Object.assign({}, cell.s.font || {}, {bold:true});
+        }
+      }
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Expiry Report");
+
+  // Write file
+  XLSX.writeFile(wb, "Expiry_Report.xlsx");
+}
+
+/* wire top inputs to calculation */
+[ mfgDate, expDate, auditDate ].forEach(f => {
   f.addEventListener("change", calculate);
   f.addEventListener("input", calculate);
 });
 
-currentDate.value = new Date().toISOString().split("T")[0];
-</script>
+/* copy top mfg/exp/audit to save form when changed */
+mfgDate.addEventListener("change", ()=>{ mfgDate2.value = mfgDate.value; });
+expDate.addEventListener("change", ()=>{ expDate2.value = expDate.value; });
+auditDate.addEventListener("change", ()=>{ auditDate2.value = auditDate.value; });
 
-<link rel="manifest" href="manifest.json">
-<script>
-if("serviceWorker" in navigator){
- navigator.serviceWorker.register("./service-worker.js");
+/* initial page defaults */
+auditDate.value = today;
+mfgDate2.value = mfgDate.value;
+expDate2.value = expDate.value;
+auditDate2.value = auditDate.value;
+regionInp.value = "South MH";
+rahInp.value = "Satish Waykar";
+
+/* Service worker registration */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn("SW register failed:", err));
 }
 </script>
 

@@ -288,8 +288,10 @@ function calculate(){
 
   let pct = 0;
   if(total > 0){
-    const days_exp_minus_near = daysBetween(near, e);
-    pct = ((days_exp_minus_near / total) * 100);
+    // percent of shelf life remaining = (days from audit date to expiry) / total shelf life
+    // clamp to 0 for expired products
+    const daysRemaining = Math.max(0, daysBetween(a, e));
+    pct = ((daysRemaining / total) * 100);
     pct = isNaN(pct) ? 0 : parseFloat(pct.toFixed(1));
   }
 
